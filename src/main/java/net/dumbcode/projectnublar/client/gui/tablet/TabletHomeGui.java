@@ -7,7 +7,7 @@ import net.dumbcode.dumblibrary.client.gui.GuiDropdownBox;
 import net.dumbcode.dumblibrary.client.gui.SelectListEntry;
 import net.dumbcode.projectnublar.server.ProjectNublar;
 import net.dumbcode.projectnublar.server.network.C27InstallModule;
-import net.dumbcode.projectnublar.server.network.C28ModuleClicked;
+import net.dumbcode.projectnublar.server.network.C28LinkClicked;
 import net.dumbcode.projectnublar.server.tablet.ModuleItem;
 import net.dumbcode.projectnublar.server.tablet.TabletItemStackHandler;
 import net.dumbcode.projectnublar.server.tablet.TabletModuleType;
@@ -17,7 +17,6 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
-import org.lwjgl.input.Mouse;
 
 import javax.vecmath.Point2i;
 import java.io.IOException;
@@ -266,7 +265,7 @@ public class TabletHomeGui extends BaseBackgroundTabletScreen {
         public void onClicked() {
             System.out.println(entry.getType().getRegistryName() + ": clicked");
             mc.displayGuiScreen(new OpenedTabletScreen(hand));
-            ProjectNublar.NETWORK.sendToServer(new C28ModuleClicked(this.entry.getType().getRegistryName(), hand));
+            ProjectNublar.NETWORK.sendToServer(new C28LinkClicked(this.entry.getType().getRegistryName(), hand));
         }
     }
 

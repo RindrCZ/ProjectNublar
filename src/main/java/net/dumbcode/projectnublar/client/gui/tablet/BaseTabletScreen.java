@@ -26,6 +26,8 @@ public abstract class BaseTabletScreen extends GuiScreen {
     protected int tabletWidth;
     protected int topStart;
     protected int tabletHeight;
+    
+    protected String route;
 
     protected boolean homeButton = true;
 
@@ -51,25 +53,25 @@ public abstract class BaseTabletScreen extends GuiScreen {
     public final void drawScreen(int mouseX, int mouseY, float partialTicks) {
         super.drawScreen(mouseX, mouseY, partialTicks);
         this.drawDefaultBackground();
-
+        
         boolean stencil = this.allowStenciling();
-
+        
         if(stencil) {
             StencilStack.pushSquareStencil(this.leftStart, this.topStart, this.leftStart + this.tabletWidth, this.topStart + this.tabletHeight);
         }
-
+        
         drawRect(0, 0, this.width, this.height, -1);
-
+        
         this.drawTabletScreen(mouseX, mouseY, Minecraft.getMinecraft().getRenderPartialTicks());
-
+        
         if(stencil) {
             StencilStack.popStencil();
         }
-
+        
         if(this.homeButton) {
             this.renderHomePage(mouseX, mouseY);
         }
-
+        
         this.renderNotificationBar();
         RenderUtils.renderBorderExclusive(this.leftStart, this.topStart, this.leftStart + this.tabletWidth, this.topStart + this.tabletHeight, 1, 0xFFFF00FF);
     }

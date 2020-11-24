@@ -8,24 +8,25 @@ import org.lwjgl.input.Mouse;
 import java.io.IOException;
 
 public class OpenedTabletScreen extends BaseTabletScreen {
-
+    
     @Getter
-    private TabletScreen screen;
+    private TabletPage screen;
 
     public OpenedTabletScreen(EnumHand hand) {
         super(hand);
     }
 
-    public void setScreen(TabletScreen screen) {
+    public void setScreen(TabletPage screen, String route) {
         this.screen = screen;
-        this.screen.setData(this.tabletWidth, this.tabletHeight);
+        this.route = route;
+        this.screen.setData(this.tabletWidth, this.tabletHeight, route);
     }
 
     @Override
     public void initGui() {
         super.initGui();
         if(this.screen != null) {
-            this.screen.setData(this.tabletWidth, this.tabletHeight);
+            this.screen.setData(this.tabletWidth, this.tabletHeight, this.route);
         }
     }
 
@@ -39,7 +40,7 @@ public class OpenedTabletScreen extends BaseTabletScreen {
         if(this.screen != null) {
             GlStateManager.pushMatrix();
             GlStateManager.translate(this.leftStart, this.topStart, 0);
-            this.screen.render(mouseX - this.leftStart, mouseY - this.topStart, partialTicks);
+            this.screen.render(mouseX - this.leftStart, mouseY - this.topStart, partialTicks, "");
             GlStateManager.popMatrix();
         }
     }
