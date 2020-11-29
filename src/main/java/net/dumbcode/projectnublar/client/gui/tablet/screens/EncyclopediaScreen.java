@@ -2,29 +2,41 @@ package net.dumbcode.projectnublar.client.gui.tablet.screens;
 
 import com.google.gson.Gson;
 import lombok.RequiredArgsConstructor;
+import net.dumbcode.dumblibrary.client.gui.GuiHelper;
 import net.dumbcode.dumblibrary.client.gui.GuiScrollBox;
 import net.dumbcode.dumblibrary.client.gui.GuiScrollboxEntry;
+import net.dumbcode.dumblibrary.client.model.tabula.TabulaModel;
+import net.dumbcode.dumblibrary.server.ecs.component.EntityComponentTypes;
+import net.dumbcode.dumblibrary.server.ecs.component.additionals.RenderLocationComponent;
+import net.dumbcode.dumblibrary.server.ecs.component.impl.ModelComponent;
 import net.dumbcode.projectnublar.client.gui.tablet.TabletPage;
 import net.dumbcode.projectnublar.server.ProjectNublar;
+import net.dumbcode.projectnublar.server.dinosaur.Dinosaur;
+import net.dumbcode.projectnublar.server.entity.DinosaurEntity;
 import net.minecraft.client.gui.Gui;
+import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.client.resources.I18n;
+import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.util.ResourceLocation;
+import net.minecraftforge.common.BiomeDictionary;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class EncyclopediaScreen extends TabletPage {
 	
 	private final int specButtonX = 120;
 	private final int specButtonY = 80;
-	private HashMap<String, EncyclopediaPage> pages = new HashMap<String, EncyclopediaPage>();
+	private HashMap<String, EncyclopediaPage> pages = new HashMap<>();
 	private EncyclopediaPage homePage = new HomePage(this);
 	private EncyclopediaPage currentPage;
-	private boolean loadedData = false;
 	private Map<?, ?> data;
-	private Map<?, ?> dinosaurs;
-	private Map<?, ?> plants;
+	
+	private static final Logger logger =  LogManager.getLogger();
 	
 	@Override
 	public void onSetAsCurrentScreen() {
@@ -36,10 +48,8 @@ public class EncyclopediaScreen extends TabletPage {
 			String result = s.hasNext() ? s.next() : "";
 			s.close();
 			this.data = gson.fromJson(result, Map.class);
-			this.dinosaurs = (Map<?, ?>) data.get("dinosaurs");
-			this.plants = (Map<?, ?>) data.get("plants");
-			loadedData = true;
 		} catch (IOException e) {
+			logger.warn("Could not load lang file for {}, defaulting to en_us", "lang");
 			e.printStackTrace();
 		}
 		
@@ -49,12 +59,12 @@ public class EncyclopediaScreen extends TabletPage {
 	
 	@Override
 	public void render(int mouseX, int mouseY, float partialTicks, String route) {
-		for(int i = 10; i <= 500; i += 10) {
-			Gui.drawRect(i, 0, i+1, 280, 0xFF444444);
-		}
-		for(int i = 10; i <= 280; i += 10) {
-			Gui.drawRect(0, i, 500, i+1, 0xFF444444);
-		}
+//		for(int i = 10; i <= 500; i += 10) {
+//			Gui.drawRect(i, 0, i+1, 280, 0xFF444444);
+//		}
+//		for(int i = 10; i <= 280; i += 10) {
+//			Gui.drawRect(0, i, 500, i+1, 0xFF444444);
+//		}
 		MC.fontRenderer.drawString(this.route, 3, 18, 0xFF00FF00);
 		if(!this.route.equals("encyclopedia:/")) {
 			Gui.drawRect(0, 35, 15, 50, 0xFF000000);
@@ -63,7 +73,7 @@ public class EncyclopediaScreen extends TabletPage {
 			MC.fontRenderer.drawString(this.currentPage.getClass().getSimpleName(), 3, 270, 0xFFFF0000);
 			this.currentPage.render(mouseX, mouseY, partialTicks, route);
 		} else {
-			// Navigate to home page
+			// Navigate to home page if the current page is null (likely when loading for the first time)
 			this.navigateRoute("/");
 		}
 	}
@@ -140,99 +150,124 @@ public class EncyclopediaScreen extends TabletPage {
 	
 	private class SpeciesListPage extends EncyclopediaPage {
 		private GuiScrollBox<SpeciesScrollEntry> scrollBox;
-		private List<SpeciesScrollEntry> scrollEntries = new ArrayList<SpeciesScrollEntry>();
+		private List<SpeciesScrollEntry> scrollEntries = new ArrayList<>();
 		
 		public SpeciesListPage(EncyclopediaScreen screen) {
 			super(screen);
-			this.scrollBox = new GuiScrollBox<SpeciesScrollEntry>(40, 50, 420, 80, 2, () -> this.scrollEntries);
+			this.scrollBox = new GuiScrollBox<>(40, 50, 420, 80, 2, () -> this.scrollEntries);
+			this.scrollBox.disableDefaultCellRendering();
 			// Split the list of dinosaurs into separate lists of 5 each to make the rows
-			List<Set<String>> rows = partitionSet((Set<String>) this.screen.dinosaurs.keySet(), 5);
-			rows.forEach(row -> {
-				this.scrollEntries.add(new SpeciesScrollEntry(row, this.screen.dinosaurs));
-			});
-		}
-		
-		@Override
-		public void render(int mouseX, int mouseY, float partialTicks, String route) {
-			//Gui.drawRect(120, 100, 160, 140, 0xFFFF0000);
-			scrollBox.render(mouseX, mouseY);
-		}
-		
-		@Override
-		public void onMouseClicked(int mouseX, int mouseY, int mouseButton) {
-			if(mouseX >= 120 && mouseY >= 100 && mouseX <= 160 && mouseY <= 140) {
-				this.screen.navigateRoute("mosasaurus");
+			Iterator dinoIterator = ProjectNublar.DINOSAUR_REGISTRY.getValuesCollection().iterator();
+			List<Dinosaur> dinosaurs = new ArrayList<>();
+			while(dinoIterator.hasNext()) {
+				dinosaurs.add((Dinosaur) dinoIterator.next());
+				if(dinosaurs.size() == 5) {
+					this.scrollEntries.add(new SpeciesScrollEntry(new ArrayList<>(dinosaurs), this.screen));
+					dinosaurs.clear();
+				}
+			}
+			// Make sure to add the last row if the dinosaurs aren't a perfect multiple of 5
+			if(dinosaurs.size() > 0) {
+				this.scrollEntries.add(new SpeciesScrollEntry(new ArrayList<>(dinosaurs), this.screen));
+				dinosaurs.clear();
 			}
 		}
 		
 		@Override
+		public void render(int mouseX, int mouseY, float partialTicks, String route) {
+			this.scrollBox.render(mouseX, mouseY);
+		}
+		
+		@Override
+		public void onMouseClicked(int mouseX, int mouseY, int mouseButton) {
+			this.scrollBox.mouseClicked(mouseX, mouseY, mouseButton);
+		}
+		
+		@Override
 		public void onMouseInput(int mouseX, int mouseY) {
-			scrollBox.handleMouseInput();
+			this.scrollBox.handleMouseInput();
 		}
 		
 		@Override
 		public EncyclopediaPage getSubpage(String route) {
 			return new DinosaurPage(this.screen, route);
 		}
-		
-		private List<Set<String>> partitionSet(Set<String> set, int partitionSize)
-		{
-			List<Set<String>> list = new ArrayList<>();
-			int setSize = set.size();
-			
-			Iterator iterator = set.iterator();
-			
-			while(iterator.hasNext())
-			{
-				Set newSet = new HashSet();
-				for(int j = 0; j < partitionSize && iterator.hasNext(); j++)
-				{
-					String s = (String)iterator.next();
-					newSet.add(s);
-				}
-				list.add(newSet);
-			}
-			return list;
-		}
 	}
 	
 	private class SpeciesScrollEntry implements GuiScrollboxEntry {
-		private List<String> speciesKeys;
-		private Map<?, ?> dinos;
+		private List<Dinosaur> dinos;
+		private Map<?, ?> langData;
+		private EncyclopediaScreen screen;
 		
-		public SpeciesScrollEntry(Set<String> speciesKeys, Map<?, ?> dinos) {
+		public SpeciesScrollEntry(List<Dinosaur> dinos, EncyclopediaScreen screen) {
 			super();
-			this.speciesKeys = new ArrayList<>(speciesKeys);
 			this.dinos = dinos;
+			this.langData = screen.data;
+			this.screen = screen;
 		}
 		
 		@Override
 		public void draw(int x, int y, int mouseX, int mouseY, boolean mouseOver) {
-			for(int i = 0; i < speciesKeys.size(); i++) {
+			for(int i = 0; i < this.dinos.size(); i++) {
 				int iconX = x + (i * 85);
-				Gui.drawRect(iconX, y, iconX + 80, y + 80, 0xFF36393F);
-				MC.fontRenderer.drawString((String) ((Map<?, ?>) dinos.get(speciesKeys.get(i))).get("name"), iconX + 3, y + 35, 0xFFFFFFFF);
+				if(mouseOver && mouseX >= iconX && mouseX <= iconX + 80) {
+					Gui.drawRect(iconX, y, iconX + 80, y + 80, 0xFF00FF00);
+				} else {
+					Gui.drawRect(iconX, y, iconX + 80, y + 80, 0xFF36393F);
+				}
+				String dinosaurName = this.dinos.get(i).getFormattedName();
+				String localizedName = I18n.format("projectnublar.dino." + dinosaurName + ".name");
+				int textHeight = MC.fontRenderer.getWordWrappedHeight(localizedName, 75);
+				MC.fontRenderer.drawSplitString(localizedName, iconX + 3, y + 40 - (textHeight / 2), 75,0xFFFFFFFF);
 			}
+		}
+		
+		@Override
+		public boolean onClicked(int relMouseX, int relMouseY, int mouseX, int mouseY) {
+			for(int i = 0; i < this.dinos.size(); i++) {
+				int iconX = (i * 85);
+				if(relMouseX >= iconX && relMouseX <= iconX + 80) {
+					EncyclopediaScreen.logger.info("Species {} was clicked", this.dinos.get(i).getFormattedName());
+					this.screen.navigateRoute(this.dinos.get(i).getFormattedName());
+					return true;
+				}
+			}
+			return false;
 		}
 	}
 	
 	private class DinosaurPage extends EncyclopediaPage {
+		
 		public String id;
+		
 		private String name;
 		private String scientificName;
 		private String age;
 		private String biomes;
 		private String size;
 		
+		private Dinosaur dino;
+		private DinosaurEntity entity;
+		
+		private final Framebuffer framebuffer;
+		
 		public DinosaurPage(EncyclopediaScreen screen, String id) {
 			super(screen);
+			this.dino = ProjectNublar.DINOSAUR_REGISTRY.getValue(new ResourceLocation("projectnublar:" + id));
+			this.entity = this.dino.createEntity(MC.world);
+			if(this.dino == null) {
+				// Go back to the species list if they somehow navigated to a dinosaur that doesn't exist
+				this.screen.navigateRoute("/species");
+			}
 			this.id = id;
-			Map<?, ?> dinoData = (Map<?, ?>) this.screen.dinosaurs.get(id);
-			this.name = (String) dinoData.get("name");
+			Map<?, ?> dinoData = (Map<?, ?>) this.screen.data.get(id);
+			this.name = I18n.format("projectnublar.dino." + id + ".name");
 			this.scientificName = (String) dinoData.get("scientificName");
 			this.age = (String) dinoData.get("age");
-			this.biomes = (String) dinoData.get("biomes");
+			this.biomes = this.dino.getDinosaurInfomation().getBiomeTypes().stream().map(BiomeDictionary.Type::getName).collect(Collectors.joining("; "));
 			this.size = (String) dinoData.get("size");
+			
+			this.framebuffer = new Framebuffer(180, 190, true);
 		}
 		
 		@Override
@@ -248,24 +283,37 @@ public class EncyclopediaScreen extends TabletPage {
 			// Draw the age
 			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.age", this.age), 55, 90, 0xFFFFFFFF);
 			// Draw the biomes
-			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.biomes", this.biomes), 55, 105, 0xFFFFFFFF);
+			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.biomes"), 55, 105, 0xFFFFFFFF);
+			int extraLength = MC.fontRenderer.getWordWrappedHeight(this.biomes, 200);
+			extraLength -= 15; // Subtract the extra 15 that I already factored in from the first line
+			MC.fontRenderer.drawSplitString(this.biomes, 55, 116, 200,0xFFFFFFFF);
 			// Draw the rarity
-			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.rarity", "§a", "Uncommon"), 55, 120, 0xFFFFFFFF);
+			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.rarity", "§a", "Uncommon"), 55, 135 + extraLength, 0xFFFFFFFF);
 			// Draw the diet
-			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.diet", "Piscovore"), 55, 135, 0xFFFFFFFF);
+			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.diet", "Piscovore"), 55, 150 + extraLength, 0xFFFFFFFF);
 			// Draw the size
-			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.size", this.size), 55, 150, 0xFFFFFFFF);
+			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.size", this.size), 55, 165 + extraLength, 0xFFFFFFFF);
 			// Draw the genome percent
-			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.genome_percent", "§a", "90%"), 55, 165, 0xFFFFFFFF);
-			// Draw genome progress bar
-			Gui.drawRect(55, 175, 255, 190, 0xFFFF0000);
-			Gui.drawRect(55, 175, 235, 190, 0xFF00FF00);
+			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.genome_percent", "§6", "100%"), 55, 180 + extraLength, 0xFFFFFFFF);
 			// Draw the cloned assets
-			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.cloned_assets", "2"), 55, 195, 0xFFFFFFFF);
+			MC.fontRenderer.drawString(I18n.format("projectnublar.gui.encyclopedia.cloned_assets", "2"), 55, 195 + extraLength, 0xFFFFFFFF);
+			this.drawDinosaur();
 		}
 		
 		private void drawDinosaur() {
 			// TODO make it draw the dinosaur
+			this.framebuffer.bindFramebuffer(true);
+			GuiHelper.prepareModelRendering(280, 50, 30f, 0f, 90f);
+			
+			Optional<ModelComponent> model = this.entity.getComponentMap().get(EntityComponentTypes.MODEL);
+			ResourceLocation texture = model.map(ModelComponent::getTexture).map(RenderLocationComponent.ConfigurableLocation::getLocation).orElse(TextureMap.LOCATION_MISSING_TEXTURE);
+			MC.getTextureManager().bindTexture(texture);
+			TabulaModel tabModel = this.entity.getOrExcept(EntityComponentTypes.MODEL).getModelCache();
+			tabModel.renderBoxes(1f/16f);
+			
+			GuiHelper.cleanupModelRendering();
+			
+			MC.getFramebuffer().bindFramebuffer(true);
 		}
 		
 		@Override
