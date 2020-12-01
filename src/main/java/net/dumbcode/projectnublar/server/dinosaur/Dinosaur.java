@@ -4,11 +4,14 @@ import com.google.common.collect.Maps;
 import com.google.gson.*;
 import lombok.Getter;
 import lombok.Setter;
+import net.dumbcode.dumblibrary.client.TextureUtils;
 import net.dumbcode.dumblibrary.server.animation.AnimationContainer;
 import net.dumbcode.dumblibrary.server.ecs.component.EntityComponent;
 import net.dumbcode.dumblibrary.server.ecs.component.EntityComponentAttacher;
 import net.dumbcode.dumblibrary.server.ecs.component.EntityComponentStorage;
 import net.dumbcode.dumblibrary.server.ecs.component.EntityComponentType;
+import net.dumbcode.dumblibrary.server.ecs.component.storge.ShowcasingTextureStorage;
+import net.dumbcode.dumblibrary.server.utils.IndexedObject;
 import net.dumbcode.projectnublar.server.ProjectNublar;
 import net.dumbcode.projectnublar.server.dinosaur.data.DinosaurInformation;
 import net.dumbcode.projectnublar.server.dinosaur.data.ItemProperties;
@@ -24,9 +27,7 @@ import net.minecraftforge.registries.IForgeRegistryEntry;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.lang.reflect.Type;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
 @Getter
 @Setter
@@ -45,6 +46,9 @@ public class Dinosaur extends IForgeRegistryEntry.Impl<Dinosaur> {
     private final DinosaurInformation dinosaurInfomation = new DinosaurInformation();
 
     private final EntityComponentAttacher attacher = new EntityComponentAttacher();
+
+    @Getter(lazy = true) private final ResourceLocation fullTextureLocationMale = this.generateFullTexture(true);
+    @Getter(lazy = true) private final ResourceLocation fullTextureLocationFemale = this.generateFullTexture(false);
 
     private Map<String, AnimationContainer> modelContainer = Maps.newHashMap();
 
@@ -108,6 +112,20 @@ public class Dinosaur extends IForgeRegistryEntry.Impl<Dinosaur> {
 
     public void attachDefaultComponents() {
         //Should be overpriced
+    }
+
+    private ResourceLocation generateFullTexture(boolean male) {
+        List<IndexedObject<String>> list = new ArrayList<>();
+        this.attacher.getStorages(ShowcasingTextureStorage.class, t -> t.gatherTextures(list::add));
+        String path = this.getRegName().getPath();
+        String gen = male ? "male" : "female";
+        return TextureUtils.generateMultipleTexture(IndexedObject.sortIndex(list)
+            .stream()
+            .map(s -> new ResourceLocation(this.getRegName().getNamespace(),
+                "textures/entities/"+path+"/adult/"+gen+"/" + path+"_"+gen+"_"+s+".png")
+            )
+            .toArray(ResourceLocation[]::new)
+        );
     }
 
     /**
